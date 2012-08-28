@@ -23,6 +23,7 @@ AppNamelessWindow : AppNamelessWidget {
 		window.toFrontAction = { window.notify(\windowToFront, this) };
 		window.endFrontAction = { window.notify(\windowEndFront, this) };
 		window.front;	// Update views next, after window has drawn:
+		model.updateListeners;
 	}
 }
 
@@ -122,6 +123,27 @@ AppView : AppNamedWidget {
 	previousItem { view.action = { adapter.adapter.previous; } }
 	firstItem { view.action = { adapter.adapter.first; } }
 	lastItem { view.action = { adapter.adapter.last; } }
+	
+	keyDownAction_ { | func |
+		view.keyDownAction_({ | view, char, modifiers, unicode, keycode |
+			func.(this, char, modifiers, unicode, keycode);
+		})
+	}
+	
+	initValue { | value |
+		// initialize a view's value AFTER the initial update has been received at window creation
+		view.addNotifierOneShot(adapter, \value, { { view.value = value }.defer(0.01) });
+	}
+	
+	initItems { | items, value |
+		view.addNotifierOneShot(adapter, \value, {
+			{	// make sure you are after all other itializations
+				items !? { view.items = items };
+				value !? { view.value = value};
+			}.defer(0.01);
+		});
+		
+	}
 }
 
 AppWindow : AppView { // not tested. Use WindowHandler???
@@ -274,15 +296,21 @@ AppTextValueView : AppValueView { // for StaticText, TextField, TextView
 		this.listItem;
 		super.proxyHistory(proxySelector);
 	}
+
+	initValue { | string |
+		// initialize a view's value AFTER the initial update has been received at window creation
+		view.addNotifierOneShot(adapter, \value, {
+			{ view.string = string }.defer(0.01); // ensure you initialize after initial updates
+		});
+	}
 }
 
 AppTextView : AppTextValueView {
 	initView {
 		view = TextView();
 		super.initView;
-		this.addNotifier(adapter, \getContents, { adapter.valueAction_(view.string, this) });
-	}
-	
+		this.addNotifier(adapter, \getContents, { adapter.valueAction_(view.string, this) })
+	}	
 }
 
 AppStaticTextView : AppTextValueView {
@@ -291,4 +319,5 @@ AppStaticTextView : AppTextValueView {
 		super.initView;
 	}
 	defaultViewAction { ^{ /* view has no action */ } }
+	noUpdate { updateAction = {} } // for StaticText attached to list view items
 }
